@@ -81,7 +81,7 @@ void groundOperation()
   
   //If less than 2 images stored: Take picture
   
-  //Transmit as much image data as possible
+  //When the millisecond clock is at a whole second, transmit as much image data as possible
  }
 }
 
