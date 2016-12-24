@@ -60,7 +60,8 @@ void landing()
 void groundOperation()
 {
  //Maximize bandwith usage and point scoring. Ensure everything is timed correctly to avoid skipping transmissions because of data processing or servo operation delays
- //It is probably more effective to repeatedly send remotely-pointed images (at 15 points each) instead of bothering with the other telemetry. Verify this with calculations. 
+ //It is probably more effective to repeatedly send remotely-pointed images instead of bothering with the other telemetry.
+ //Each remotely pointed image is worth 15 points each and I've read that they should be around 200kb each. 
  //Even if we just send images, we still need to send some sensor data at the begining to meet rule requirements
 
  //Send basic sensor data (light, temp, humidity, battery voltage, GPS) to GS several times
