@@ -1,7 +1,37 @@
-void setup() 
-{
- 
+#include <Adafruit_Sensor.h>  //general
+#include <Wire.h>
+#include <Adafruit_BME280.h> // for barometer/temp/humidity sensor
+#include <Adafruit_INA219.h> // for current sensor
+#include <Adafruit_TSL2561_U.h>//light sensor
+#include <SoftwareSerial.h> //xbee
+#include<Xbee.h>
 
+//Need to configure
+Xbee xbee; //Using API mode
+Adafruit_BME280 bme;  //barometer/temp/alt sensor
+Adafruit_INA219 ina;    //current sensor
+Adafruit_TSL2561_Unified tsl;
+
+float SEALEVELPRESSURE_HPA = 1013.25;
+float pressure, altitude, temperature, humidity, voltage, lightIntensity; //telemetry
+Tx16Request tx;
+uint8_t payload[]; //data packet to send
+
+void setup()
+{
+    Serial.begin(9600);
+    xbee.setSerial(9600);
+    if(!bme.begin())
+    {
+        Serial.print("BME not detected");
+        while(1);
+    }
+    if(!tsl.begin())
+    {
+        Serial.print("TSL not detected");
+        while(1);
+    }
+    ina.begin();
 }
 
 void loop() 
@@ -65,6 +95,55 @@ void groundOperation()
  //Even if we just send images, we still need to send some sensor data at the begining to meet rule requirements
 
  //Send basic sensor data (light, temp, humidity, battery voltage, GPS) to GS several times
+    for(int i=0; i<10; i++)
+    {
+        /*each reading has 4 bytes + letter (start) and period (end) = 6 bytes * 4 sensor readings */
+        payload = uint8_t[6*4]
+        
+        /*finds temperature in Celcius*/
+        temperature = bme.readTemperature();
+        Serial.print("Temperature: "); Serial.print(temperature); Serial.println(" C"); //for ground testing
+        /*writes pressure to packet*/
+        payload[0]=(byte)('T'); //T for temperature reading
+        payload[5]=(byte)('.');
+        writeFloat(temperature, payload, 1, 4);
+        
+        /*finds humidity in percent*/
+        humidity = bme.readHumidity();
+        Serial.print("Humidity: "); Serial.print(humidity); Serial.println(" %"); //for ground testing
+        /*writes pressure to packet*/
+        payload[6]=(byte)('P'); //P for pressure reading
+        payload[11]=(byte)('.');
+        writeFloat(temperature, payload, 7, 10);
+        
+        /*finds voltage in volts*/
+        voltage = ina.getBusVoltage() + ina.getShuntVoltage()/1000; //load voltage
+        Serial.print("Voltage: "); Serial.print(voltage); Serial.println(" V"); //for ground testing
+        /*writes voltage to packet*/
+        payload[12]=(byte)('V'); //V for voltage reading
+        payload[17]=(byte)('.');
+        writeFloat(temperature, payload, 13, 16);
+        
+        /*finds light intensity in lux*/
+        sensors_event_t event;
+        tsl.getEvent(&event);
+        if (event.light)
+        {
+            lightIntensity = event.light;
+            Serial.print("Light: "); Serial.print(voltage); Serial.println(" lux"); //for ground testing
+            /*writes voltage to packet*/
+            payload[18]=(byte)('L'); //V for voltage reading
+            payload[23]=(byte)('.');
+            writeFloat(temperature, payload, 19, 22);
+        }
+        
+        //Send telemtry packet
+        tx = Tx16Request(0x0000, payload, sizeof(payload));
+        xbee.send(tx);
+        
+        //do once per second
+        delay(1000);
+    }
  
  //Then send images repeatedly:
  while(true)
@@ -96,3 +175,11 @@ void rotateCamera()
   
 }
 
+void writeFloat(float f, uint8_t* &payload, start, end) //writes float to data packet
+{
+    unsigned int asInt = *((int*)&f);
+    for (int i = start; i <= end; i++)
+    {
+        payload[i] = (asInt >> 8 * i) & 0xFF;
+    }
+}
