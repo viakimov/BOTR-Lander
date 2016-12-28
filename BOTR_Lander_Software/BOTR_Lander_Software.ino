@@ -4,7 +4,7 @@
 #include <Adafruit_INA219.h> // for current sensor
 #include <Adafruit_TSL2561_U.h>//light sensor
 #include <SoftwareSerial.h> //xbee
-#include<Xbee.h>
+#include <XBee.h>
 
 //Need to configure
 Xbee xbee; //Using API mode
