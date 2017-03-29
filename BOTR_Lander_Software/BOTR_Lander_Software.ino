@@ -32,6 +32,10 @@ void setup()
         while(1);
     }
     ina.begin();
+    ina219.setCalibration_16V_400mA()
+        
+    tsl.enableAutoRange(true);
+	tsl.setIntegrationTime(TSL2561_INTEGRATIONTIME_13MS); 
 }
 
 void loop() 
