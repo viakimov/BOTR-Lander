@@ -15,7 +15,13 @@ Adafruit_TSL2561_Unified tsl;
 float SEALEVELPRESSURE_HPA = 1013.25;
 float pressure, altitude, temperature, humidity, voltage, lightIntensity; //telemetry
 Tx16Request tx;
-uint8_t payload[]; //data packet to send
+uint8_t payload[] = uint8_t[6*4]; //data packet to send
+
+unsigned long start = millis();
+unsigned long time;
+
+TxStatusResponse txStatus = TxStatusResponse();
+Tx16Request tx = Tx16Request(0x1874, payload, sizeof(payload));
 
 void setup()
 {
@@ -102,8 +108,9 @@ void groundOperation()
     for(int i=0; i<10; i++)
     {
         /*each reading has 4 bytes + letter (start) and period (end) = 6 bytes * 4 sensor readings */
-        payload = uint8_t[6*4]
+        //payload = uint8_t[6*4]
         
+	time = Micros();
         /*finds temperature in Celcius*/
         temperature = bme.readTemperature();
         Serial.print("Temperature: "); Serial.print(temperature); Serial.println(" C"); //for ground testing
@@ -116,12 +123,12 @@ void groundOperation()
         humidity = bme.readHumidity();
         Serial.print("Humidity: "); Serial.print(humidity); Serial.println(" %"); //for ground testing
         /*writes pressure to packet*/
-        payload[6]=(byte)('P'); //P for pressure reading
+        payload[6]=(byte)('H'); //H for humidity reading
         payload[11]=(byte)('.');
         writeFloat(temperature, payload, 7, 10);
         
         /*finds voltage in volts*/
-        voltage = ina.getBusVoltage() + ina.getShuntVoltage()/1000; //load voltage
+        voltage = ina.getBusVoltage_V() + ina.getShuntVoltage_mV()/1000; //load voltage
         Serial.print("Voltage: "); Serial.print(voltage); Serial.println(" V"); //for ground testing
         /*writes voltage to packet*/
         payload[12]=(byte)('V'); //V for voltage reading
@@ -134,19 +141,20 @@ void groundOperation()
         if (event.light)
         {
             lightIntensity = event.light;
-            Serial.print("Light: "); Serial.print(voltage); Serial.println(" lux"); //for ground testing
+            Serial.print("Light: "); Serial.print(lightIntensity); Serial.println(" lux"); //for ground testing
             /*writes voltage to packet*/
-            payload[18]=(byte)('L'); //V for voltage reading
+            payload[18]=(byte)('L'); //L for light reading
             payload[23]=(byte)('.');
             writeFloat(temperature, payload, 19, 22);
         }
         
         //Send telemtry packet
-        tx = Tx16Request(0x0000, payload, sizeof(payload));
         xbee.send(tx);
-        
-        //do once per second
-        delay(1000);
+	
+        time = Micros();
+	while(time % 1000000 > 8)
+	{
+	}
     }
  
  //Then send images repeatedly:
