@@ -5,6 +5,7 @@
 #include <Adafruit_TSL2561_U.h>//light sensor
 #include <SoftwareSerial.h> //xbee
 #include <XBee.h>
+#include <CurieIMU.h> //accelerometer
 
 //Need to configure
 Xbee xbee; //Using API mode
@@ -42,6 +43,9 @@ void setup()
         
     tsl.enableAutoRange(true);
 	tsl.setIntegrationTime(TSL2561_INTEGRATIONTIME_13MS); 
+	
+	CurieIMU.begin();
+	CurieIMU.setAccelerometerRange(4);
 }
 
 void loop() 
@@ -72,6 +76,26 @@ void integration()
 
 void launch()
 {
+	uint8_t payload_launch[] = uint8_t[6*2];
+	while(bmp.readAltitude(seaLevelPressure) < 155) //Rounded up to 155 meters, around 510 feet to account for error
+	{
+	float altitude = bmp.readAltitude(seaLevelPressure);
+	payload_launch[0]=(byte)('A'); //A for altitude reading
+    payload_launch[5]=(byte)('.');
+    writeFloat(altitude, payload_launch, 1, 4);
+	time = Micros();
+	float ax, ay, az;
+    CurieIMU.readAccelerometerScaled(ax, ay, az);
+	payload[6]=(byte)('C'); //C for acceleration reading
+    payload[11]=(byte)('.');
+    writeFloat(ax, payload_launch, 7, 10); //Identify which axis is actually facing in desired direction
+	while(time % 1000000 > 4)
+	{
+		time = Micros();
+	}
+		Tx16Request tx2 = Tx16Request(0x1874, payload_launch, sizeof(payload_launch));
+		xbee.send(tx2);
+	}
   //In in one second intervals:
   //Measure altitude from the barometer and log it in the SD card
   //Calculate acceleration from barometric data and log it in the SD card
@@ -110,7 +134,7 @@ void groundOperation()
         /*each reading has 4 bytes + letter (start) and period (end) = 6 bytes * 4 sensor readings */
         //payload = uint8_t[6*4]
         
-	time = Micros();
+ 		time = Micros();
         /*finds temperature in Celcius*/
         temperature = bme.readTemperature();
         Serial.print("Temperature: "); Serial.print(temperature); Serial.println(" C"); //for ground testing
@@ -152,8 +176,9 @@ void groundOperation()
         xbee.send(tx);
 	
         time = Micros();
-	while(time % 1000000 > 8)
+	while(time % 1000000 > 4)
 	{
+		time = Micros();
 	}
     }
  
