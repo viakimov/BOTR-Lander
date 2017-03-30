@@ -14,33 +14,28 @@ Adafruit_INA219 ina;    //current sensor
 Adafruit_TSL2561_Unified tsl;
 
 float SEALEVELPRESSURE_HPA = 1013.25;
-float pressure, altitude, temperature, humidity, voltage, lightIntensity; //telemetry
-Tx16Request tx;
-uint8_t payload[] = uint8_t[6 * 4]; //data packet to send
+float pressure, altitude, accelerationx, accelerationy, accelerationz temperature, humidity, voltage, lightIntensity; //telemetry
+uint8_t payload_ground[] = uint8_t[6 * 4]; //data packet to send
+uint8_t payload_launch[] = uint8_t[6 * 2];
 
 unsigned long start = millis();
-unsigned long time;
 
 TxStatusResponse txStatus = TxStatusResponse();
-Tx16Request tx = Tx16Request(0x1874, payload, sizeof(payload));
+Tx16Request tx_ground;
+Tx16Request tx_launch;
 
 void setup()
 {
   Serial.begin(9600);
+  
   xbee.setSerial(9600);
-  if (!bme.begin())
-  {
-    Serial.print("BME not detected");
-    while (1);
-  }
-  if (!tsl.begin())
-  {
-    Serial.print("TSL not detected");
-    while (1);
-  }
+  
+  bme.begin()
+  
   ina.begin();
   ina219.setCalibration_16V_400mA()
-
+  
+  tsl.begin()
   tsl.enableAutoRange(true);
   tsl.setIntegrationTime(TSL2561_INTEGRATIONTIME_13MS);
 
@@ -76,24 +71,24 @@ void integration()
 
 void launch()
 {
-  uint8_t payload_launch[] = uint8_t[6 * 2];
   while (bmp.readAltitude(seaLevelPressure) < 155) //Rounded up to 155 meters, around 510 feet to account for error
   {
-    float altitude = bmp.readAltitude(seaLevelPressure);
+    altitude = bmp.readAltitude(seaLevelPressure);
     payload_launch[0] = (byte)('A'); //A for altitude reading
     payload_launch[5] = (byte)('.');
     writeFloat(altitude, payload_launch, 1, 4);
-    time = Micros();
-    float ax, ay, az;
-    CurieIMU.readAccelerometerScaled(ax, ay, az);
+    
+    CurieIMU.readAccelerometerScaled(accelerationx, accelerationy, accelerationz);
     payload[6] = (byte)('C'); //C for acceleration reading
     payload[11] = (byte)('.');
-    writeFloat(ax, payload_launch, 7, 10); //Identify which axis is actually facing in desired direction
+    writeFloat(accelerationx, payload_launch, 7, 10); //Identify which axis is actually facing in desired direction
+    
+    tx_launch = Tx16Request(0x1874, payload_launch, sizeof(payload_launch));
+    xbee.send(tx_launch);
+    
     while (Micros() % 1000000 > 4) //Delay for full second
     {
     }
-    Tx16Request tx2 = Tx16Request(0x1874, payload_launch, sizeof(payload_launch));
-    xbee.send(tx2);
   }
   //In in one second intervals:
   //Measure altitude from the barometer and log it in the SD card
@@ -137,25 +132,25 @@ void groundOperation()
     temperature = bme.readTemperature();
     Serial.print("Temperature: "); Serial.print(temperature); Serial.println(" C"); //for ground testing
     /*writes pressure to packet*/
-    payload[0] = (byte)('T'); //T for temperature reading
-    payload[5] = (byte)('.');
-    writeFloat(temperature, payload, 1, 4);
+    payload_ground[0] = (byte)('T'); //T for temperature reading
+    payload_ground[5] = (byte)('.');
+    writeFloat(temperature, payload_ground, 1, 4);
 
     /*finds humidity in percent*/
     humidity = bme.readHumidity();
     Serial.print("Humidity: "); Serial.print(humidity); Serial.println(" %"); //for ground testing
     /*writes pressure to packet*/
-    payload[6] = (byte)('H'); //H for humidity reading
-    payload[11] = (byte)('.');
-    writeFloat(temperature, payload, 7, 10);
+    payload_ground[6] = (byte)('H'); //H for humidity reading
+    payload_ground[11] = (byte)('.');
+    writeFloat(temperature, payload_ground, 7, 10);
 
     /*finds voltage in volts*/
     voltage = ina.getBusVoltage_V() + ina.getShuntVoltage_mV() / 1000; //load voltage
     Serial.print("Voltage: "); Serial.print(voltage); Serial.println(" V"); //for ground testing
     /*writes voltage to packet*/
-    payload[12] = (byte)('V'); //V for voltage reading
-    payload[17] = (byte)('.');
-    writeFloat(temperature, payload, 13, 16);
+    payload_ground[12] = (byte)('V'); //V for voltage reading
+    payload_ground[17] = (byte)('.');
+    writeFloat(temperature, payload_ground, 13, 16);
 
     /*finds light intensity in lux*/
     sensors_event_t event;
@@ -165,13 +160,14 @@ void groundOperation()
       lightIntensity = event.light;
       Serial.print("Light: "); Serial.print(lightIntensity); Serial.println(" lux"); //for ground testing
       /*writes voltage to packet*/
-      payload[18] = (byte)('L'); //L for light reading
-      payload[23] = (byte)('.');
-      writeFloat(temperature, payload, 19, 22);
+      payload_ground[18] = (byte)('L'); //L for light reading
+      payload_ground[23] = (byte)('.');
+      writeFloat(temperature, payload_ground, 19, 22);
     }
 
+    tx_ground = Tx16Request(0x1874, payload_ground, sizeof(payload_ground))
     //Send telemtry packet
-    xbee.send(tx);
+    xbee.send(tx_ground);
 
     while (Micros() % 1000000 > 4) //Delay until around next second
     {
