@@ -89,6 +89,7 @@ void loop()
         state = 1;
       }
     }
+    dataFile.println(data);
     data = "";
   }
   else if(state == 1)
@@ -116,8 +117,10 @@ void loop()
         state = 2;
       }
     }
+    dataFile.println(data);
+    data = "Debug! " + String(GPS.satellites) + " " + String(GPS.fix) + " " + String(GPS.fixquality);
+    dataFile.println(data);
     data = "";
-    //GPS.satellites, GPS.fix, GPS.fixquality for debugging
   }
   else if(state == 2)
   {
@@ -141,8 +144,11 @@ void loop()
     writeFloat(humidity, payload, 20, 23);
     writeFloat(lightIntensity, payload, 24, 27);
     writeFloat(latitude, payload, 28, 31);
-    writeFloat(longitude, payload, 32, 35);
+    writeFloat(longitude, payload, 32, 35)du;
     data = "Landed! " + String(altitude) + " " + String(pressure) + " " + String(current) + " " + String(voltage) + " " + String(temperature) + " " + String(humidity) + " " + String(lightIntensity)  + " " + String(latitude) + " " + String(longitude); //Transmit a informational pulse to ground station
+    dataFile.println(data);
+    data = "Debug! " + String(GPS.satellites) + " " + String(GPS.fix) + " " + String(GPS.fixquality);
+    dataFile.println(data);
     data = "";
     //GPS.satellites, GPS.fix, GPS.fixquality for debugging
   }
