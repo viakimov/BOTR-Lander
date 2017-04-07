@@ -39,7 +39,7 @@ Adafruit_GPS GPS(&GPSSerial);
 #define GPSECHO  false
 
 //Set up global transmission variables
-uint8_t* payload[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+uint8_t* data[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 //XBEE packets go here!
 
 void setup() {
@@ -76,11 +76,11 @@ void loop()
   {
     altitude = bme.readAltitude(SEALEVELPRESSURE_HPA);
     pressure = bme.readPressure() / 1000.0;
-    writeFloat(altitude, payload, 0, 3);
-    writeFloat(pressure, payload, 4, 7);
+    writeFloat(altitude, data, 0, 3);
+    writeFloat(pressure, data, 4, 7);
     CurieIMU.readAccelerometerScaled(accelerationx, accelerationy, accelerationz);
     netAcceleration = sqrt(pow(accelerationx, 2) + pow(accelerationy, 2) + pow(accelerationz, 2));
-    writeFloat(netAcceleration, payload, 36, 39);
+    writeFloat(netAcceleration, data, 36, 39);
     data = "Waiting to launch! " + String(altitude) + " " + String(pressure) + " "  + String(netAcceleration); //Transmit a waiting pulse to ground station
     if (netAcceleration > launchThreshold);
     {
@@ -102,16 +102,16 @@ void loop()
     voltage = ina.getBusVoltage_V() + (ina.getShuntVoltage_mV() / 1000);
     latitude = GPS.latitudeDegrees;
     longitude = GPS.longitudeDegrees;
-    writeFloat(altitude, payload, 0, 3);
-    writeFloat(pressure, payload, 4, 7);
-    writeFloat(current, payload, 8, 11);
-    writeFloat(voltage, payload, 12, 15);
-    writeFloat(latitude, payload, 28, 31);
-    writeFloat(longitude, payload, 32, 35);
+    writeFloat(altitude, data, 0, 3);
+    writeFloat(pressure, data, 4, 7);
+    writeFloat(current, data, 8, 11);
+    writeFloat(voltage, data, 12, 15);
+    writeFloat(latitude, data, 28, 31);
+    writeFloat(longitude, data, 32, 35);
     CurieIMU.readAccelerometerScaled(accelerationx, accelerationy, accelerationz);
     netAcceleration = sqrt(pow(accelerationx, 2) + pow(accelerationy, 2) + pow(accelerationz, 2));
     data = "In Flight! " + String(altitude) + " " + String(pressure) + " " + String(current) + " " + String(voltage) + " " + String(latitude) + " " + String(longitude)  + " "  + String(netAcceleration); //Transmit a informational pulse to ground station
-    writeFloat(netAcceleration, payload, 36, 39);
+    writeFloat(netAcceleration, data, 36, 39);
     if (netAcceleration > landingThreshold);
     {
       delay(250);
@@ -139,22 +139,21 @@ void loop()
     lightIntensity = event.light;
     latitude = GPS.latitudeDegrees;
     longitude = GPS.longitudeDegrees;
-    writeFloat(altitude, payload, 0, 3);
-    writeFloat(pressure, payload, 4, 7);
-    writeFloat(current, payload, 8, 11);
-    writeFloat(voltage, payload, 12, 15);
-    writeFloat(temperature, payload, 16, 19);
-    writeFloat(humidity, payload, 20, 23);
-    writeFloat(lightIntensity, payload, 24, 27);
-    writeFloat(latitude, payload, 28, 31);
-    writeFloat(longitude, payload, 32, 35);
+    writeFloat(altitude, data, 0, 3);
+    writeFloat(pressure, data, 4, 7);
+    writeFloat(current, data, 8, 11);
+    writeFloat(voltage, data, 12, 15);
+    writeFloat(temperature, data, 16, 19);
+    writeFloat(humidity, data, 20, 23);
+    writeFloat(lightIntensity, data, 24, 27);
+    writeFloat(latitude, data, 28, 31);
+    writeFloat(longitude, data, 32, 35);
     data = "Landed! " + String(altitude) + " " + String(pressure) + " " + String(current) + " " + String(voltage) + " " + String(temperature) + " " + String(humidity) + " " + String(lightIntensity)  + " " + String(latitude) + " " + String(longitude); //Transmit a informational pulse to ground station
     dataFile.println(data);
     data = "Debug! " + String(GPS.satellites) + " " + String(GPS.fix) + " " + String(GPS.fixquality);
     dataFile.println(data);
     data = "";
-    //GPS.satellites, GPS.fix, GPS.fixquality for debugging
-  }
+  }s
   else
   {
     while (1);
