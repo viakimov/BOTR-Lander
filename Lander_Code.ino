@@ -3,7 +3,7 @@
 #include <Adafruit_Sensor.h> //Unified sensor library
 #include <Adafruit_BME280.h> // for barometer/temp/humidity sensor
 #include <Adafruit_INA219.h> // for current sensor
-#include <Adafruit_TSL2561.h>//light sensor
+#include <Adafruit_TSL2561_U.h> //light sensor
 #include <CurieIMU.h> //accelerometer
 #include <Adafruit_GPS.h> //GPS
 #include <SoftwareSerial.h> //SD Card
@@ -21,9 +21,9 @@ File dataFile  = SD.open("data.txt", FILE_WRITE);
 byte state = 0; //0 is not launched, 1 is in flight, 2 is landed
 
 //Set up global sensor variables
-const Adafruit_INA219 ina; //Current
-const Adafruit_BME280 bme; //Pressure/altitude/temp/humidity
-const Adafruit_TSL2561_Unified tsl = Adafruit_TSL2561_Unified(TSL2561_ADDR_FLOAT, 12345); //Light intensity
+Adafruit_INA219 ina; //Current
+Adafruit_BME280 bme; //Pressure/altitude/temp/humidity
+Adafruit_TSL2561_Unified tsl = Adafruit_TSL2561_Unified(TSL2561_ADDR_FLOAT, 12345); //Light intensity
 
 //Set up global data variables
 float current, voltage, temperature = 0; //Voltage in Volts, Current in Amps, Temperature in Kelvin
@@ -34,18 +34,18 @@ float longitude, latitude = 0; //Location in degrees
 String data = ""; //String to be sent
 
 //Set up GPS data variables
-SoftwareSerial mySerial(8, 7);
-Adafruit_GPS GPS(&mySerial);
+#define GPSSerial Serial1
+Adafruit_GPS GPS(&GPSSerial);
 #define GPSECHO  false
 
 //Set up global transmission variables
-uint8_t payload[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+uint8_t* payload[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 //XBEE packets go here!
 
 void setup() {
   Serial.begin(115200);
 
-  bme.begin()
+  bme.begin();
   bme.setSampling(Adafruit_BME280::MODE_NORMAL,
                   Adafruit_BME280::SAMPLING_X2,  // temperature
                   Adafruit_BME280::SAMPLING_X16, // pressure
@@ -54,16 +54,16 @@ void setup() {
                   Adafruit_BME280::STANDBY_MS_0_5 );
 
   ina.begin();
-  ina219.setCalibration_16V_400mA()
+  ina.setCalibration_16V_400mA();
 
-  tsl.begin()
+  tsl.begin();
   tsl.enableAutoRange(true);
   tsl.setIntegrationTime(TSL2561_INTEGRATIONTIME_101MS);
 
   CurieIMU.begin();
   CurieIMU.setAccelerometerRange(8);
 
-  altitude = bme280.readAltitude(SEALEVELPRESSURE_HPA);
+  altitude = bme.readAltitude(SEALEVELPRESSURE_HPA);
 
   GPS.begin(9600);
   GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCGGA);
@@ -74,8 +74,8 @@ void loop()
 {
   if (state == 0)
   {
-    altitude = bme280.readAltitude(SEALEVELPRESSURE_HPA);
-    pressure = bme280.readPressure() / 1000.0;
+    altitude = bme.readAltitude(SEALEVELPRESSURE_HPA);
+    pressure = bme.readPressure() / 1000.0;
     writeFloat(altitude, payload, 0, 3);
     writeFloat(pressure, payload, 4, 7);
     CurieIMU.readAccelerometerScaled(accelerationx, accelerationy, accelerationz);
@@ -96,10 +96,10 @@ void loop()
   else if (state == 1)
   {
     GPS.read();
-    altitude = bme280.readAltitude(SEALEVELPRESSURE_HPA);
-    pressure = bme280.readPressure() / 1000.0;
-    current = ina219.getCurrent_mA() / 1000.0;
-    voltage = ina219.getBusVoltage_V() + (ina219.getShuntVoltage_mV() / 1000);
+    altitude = bme.readAltitude(SEALEVELPRESSURE_HPA);
+    pressure = bme.readPressure() / 1000.0;
+    current = ina.getCurrent_mA() / 1000.0;
+    voltage = ina.getBusVoltage_V() + (ina.getShuntVoltage_mV() / 1000);
     latitude = GPS.latitudeDegrees;
     longitude = GPS.longitudeDegrees;
     writeFloat(altitude, payload, 0, 3);
@@ -128,10 +128,10 @@ void loop()
   else if (state == 2)
   {
     GPS.read();
-    altitude = bme280.readAltitude(SEALEVELPRESSURE_HPA);
-    pressure = bme280.readPressure() / 1000.0;
-    current = ina219.getCurrent_mA() / 1000.0;
-    voltage = ina219.getBusVoltage_V() + (ina219.getShuntVoltage_mV() / 1000);
+    altitude = bme.readAltitude(SEALEVELPRESSURE_HPA);
+    pressure = bme.readPressure() / 1000.0;
+    current = ina.getCurrent_mA() / 1000.0;
+    voltage = ina.getBusVoltage_V() + (ina.getShuntVoltage_mV() / 1000);
     temperature = bme.readTemperature() + 273.15;
     humidity = bme.readHumidity();
     sensors_event_t event;
