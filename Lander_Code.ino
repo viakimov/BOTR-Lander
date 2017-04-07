@@ -102,12 +102,12 @@ void loop()
     voltage = ina.getBusVoltage_V() + (ina.getShuntVoltage_mV() / 1000);
     latitude = GPS.latitudeDegrees;
     longitude = GPS.longitudeDegrees;
-    writeFloat(altitude, data, 0, 3);
-    writeFloat(pressure, data, 4, 7);
-    writeFloat(current, data, 8, 11);
-    writeFloat(voltage, data, 12, 15);
-    writeFloat(latitude, data, 28, 31);
-    writeFloat(longitude, data, 32, 35);
+    writeFloat(altitude, 0, 3);
+    writeFloat(pressure, 4, 7);
+    writeFloat(current, 8, 11);
+    writeFloat(voltage, 12, 15);
+    writeFloat(latitude, 28, 31);
+    writeFloat(longitude, 32, 35);
     CurieIMU.readAccelerometerScaled(accelerationx, accelerationy, accelerationz);
     netAcceleration = sqrt(pow(accelerationx, 2) + pow(accelerationy, 2) + pow(accelerationz, 2));
     data = "In Flight! " + String(altitude) + " " + String(pressure) + " " + String(current) + " " + String(voltage) + " " + String(latitude) + " " + String(longitude)  + " "  + String(netAcceleration); //Transmit a informational pulse to ground station
@@ -139,15 +139,15 @@ void loop()
     lightIntensity = event.light;
     latitude = GPS.latitudeDegrees;
     longitude = GPS.longitudeDegrees;
-    writeFloat(altitude, data, 0, 3);
-    writeFloat(pressure, data, 4, 7);
-    writeFloat(current, data, 8, 11);
-    writeFloat(voltage, data, 12, 15);
-    writeFloat(temperature, data, 16, 19);
-    writeFloat(humidity, data, 20, 23);
-    writeFloat(lightIntensity, data, 24, 27);
-    writeFloat(latitude, data, 28, 31);
-    writeFloat(longitude, data, 32, 35);
+    writeFloat(altitude, 0, 3);
+    writeFloat(pressure, 4, 7);
+    writeFloat(current, 8, 11);
+    writeFloat(voltage, 12, 15);
+    writeFloat(temperature, 16, 19);
+    writeFloat(humidity, 20, 23);
+    writeFloat(lightIntensity,  24, 27);
+    writeFloat(latitude, 28, 31);
+    writeFloat(longitude, 32, 35);
     data = "Landed! " + String(altitude) + " " + String(pressure) + " " + String(current) + " " + String(voltage) + " " + String(temperature) + " " + String(humidity) + " " + String(lightIntensity)  + " " + String(latitude) + " " + String(longitude); //Transmit a informational pulse to ground station
     dataFile.println(data);
     data = "Debug! " + String(GPS.satellites) + " " + String(GPS.fix) + " " + String(GPS.fixquality);
@@ -160,11 +160,11 @@ void loop()
   }
 }
 
-void writeFloat(float f, uint8_t* &payload, int start, int end) //writes float to data packet
+void writeFloat(float f, int start, int finish) //writes float to data packet
 {
   unsigned int asInt = *((int*)&f);
-  for (int i = start; i <= end; i++)
+  for (int i = start; i <= finish; i++)
   {
-    payload[i] = (asInt >> 8 * i) & 0xFF;
+    data[i] = (unsigned char*)((asInt >> 8 * i) & 0xFF);
   }
 }
