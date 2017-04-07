@@ -5,11 +5,18 @@
 #include <Adafruit_INA219.h> // for current sensor
 #include <Adafruit_TSL2561_U.h>//light sensor
 #include <CurieIMU.h> //accelerometer
+#include <SPI.h> //SD Card
+#include <Adafruit_GPS.h> //GPS
+#include <SoftwareSerial.h> //SD Card
+#include <SD.h> //SD Card
 
 #define SEALEVELPRESSURE_HPA 1013.25 //sea level pressure
 #define launchThreshold 0.0;
 #define landingThreshold 0.0;
 #define XBEEaddress 0x0000;
+
+//Set up global file variable
+File dataFile  = SD.open("data.txt", FILE_WRITE);
 
 //Set up global state variable
 byte state = 0; //0 is not launched, 1 is in flight, 2 is landed
@@ -24,10 +31,16 @@ float current, voltage, temperature = 0; //Voltage in Volts, Current in Amps, Te
 float humidity, pressure = 0; //Humidity in Percent Humidity, Pressure in Kilopascals
 float altitude, launchAltitude, lightIntensity = 0; //Altitudes in Meters, lightIntensity in lux
 float accelerationx, accelerationy, accelerationz = 0; //Accelerations in m/s^2
+float longitude, latitude = 0; //Location in degrees
 String data = ""; //String to be sent
 
+//Set up GPS data variables
+SoftwareSerial mySerial(8, 7);
+Adafruit_GPS GPS(&mySerial);
+#define GPSECHO  false
+
 //Set up global transmission variables
-//Byte data transmission arrays go here!
+uint8_t payload[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 //XBEE packets go here!
 
 void setup() {
@@ -52,6 +65,10 @@ void setup() {
   CurieIMU.setAccelerometerRange(8);
 
   altitude = bme280.readAltitude(SEALEVELPRESSURE_HPA);
+
+  GPS.begin(9600);
+  GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCGGA);
+  GPS.sendCommand(PMTK_SET_NMEA_UPDATE_1HZ);
 }
 
 void loop()
@@ -60,6 +77,8 @@ void loop()
   {
     altitude = bme280.readAltitude(SEALEVELPRESSURE_HPA);
     pressure = bme280.readPressure()/1000.0;
+    writeFloat(altitude, payload, 0, 3);
+    writeFloat(pressure, payload, 4, 7);
     data = "Waiting to launch! " + String(altitude) + " " + String(pressure); //Transmit a waiting pulse to ground station
     CurieIMU.readAccelerometerScaled(accelerationx, accelerationy, accelerationz);
     if(sqrt(pow(accelerationx, 2) + pow(accelerationy, 2) + pow(accelerationz, 2)) > launchThreshold);
@@ -74,11 +93,20 @@ void loop()
   }
   else if(state == 1)
   {
+    GPS.read();
     altitude = bme280.readAltitude(SEALEVELPRESSURE_HPA);
     pressure = bme280.readPressure() / 1000.0;
     current = ina219.getCurrent_mA() / 1000.0;
     voltage = ina219.getBusVoltage_V() + (ina219.getShuntVoltage_mV()/1000);
-    data = "In Flight! " + String(altitude) + " " + String(pressure) + " " + String(current) + " " + String(voltage); //Transmit a informational pulse to ground station
+    latitude = GPS.latitudeDegrees;
+    longitude = GPS.longitudeDegrees;
+    writeFloat(altitude, payload, 0, 3);
+    writeFloat(pressure, payload, 4, 7);
+    writeFloat(current, payload, 8, 11);
+    writeFloat(voltage, payload, 12, 15);
+    writeFloat(latitude, payload, 28, 31);
+    writeFloat(longitude, payload, 32, 35);
+    data = "In Flight! " + String(altitude) + " " + String(pressure) + " " + String(current) + " " + String(voltage) + " " + String(latitude) + " " + String(longitude); //Transmit a informational pulse to ground station
     CurieIMU.readAccelerometerScaled(accelerationx, accelerationy, accelerationz);
     if(sqrt(pow(accelerationx, 2) + pow(accelerationy, 2) + pow(accelerationz, 2)) > landingThreshold);
     {
@@ -89,23 +117,46 @@ void loop()
       }
     }
     data = "";
+    //GPS.satellites, GPS.fix, GPS.fixquality for debugging
   }
   else if(state == 2)
   {
-    temperature = bme.readTemperature() + 273.15;
-    humidity = bme.readHumidity();
+    GPS.read();
     altitude = bme280.readAltitude(SEALEVELPRESSURE_HPA);
     pressure = bme280.readPressure() / 1000.0;
     current = ina219.getCurrent_mA() / 1000.0;
     voltage = ina219.getBusVoltage_V() + (ina219.getShuntVoltage_mV()/1000);
+    temperature = bme.readTemperature() + 273.15;
+    humidity = bme.readHumidity();
     sensors_event_t event;
     tsl.getEvent(&event);
     lightIntensity = event.light;
-    data = "Landed! " + String(altitude) + " " + String(pressure) + " " + String(current) + " " + String(voltage) + " " + String(temperature) + " " + String(humidity) + " " + String(lightIntensity); //Transmit a informational pulse to ground station
+    latitude = GPS.latitudeDegrees;
+    longitude = GPS.longitudeDegrees;
+    writeFloat(altitude, payload, 0, 3);
+    writeFloat(pressure, payload, 4, 7);
+    writeFloat(current, payload, 8, 11);
+    writeFloat(voltage, payload, 12, 15);
+    writeFloat(temperature, payload, 16, 19);
+    writeFloat(humidity, payload, 20, 23);
+    writeFloat(lightIntensity, payload, 24, 27);
+    writeFloat(latitude, payload, 28, 31);
+    writeFloat(longitude, payload, 32, 35);
+    data = "Landed! " + String(altitude) + " " + String(pressure) + " " + String(current) + " " + String(voltage) + " " + String(temperature) + " " + String(humidity) + " " + String(lightIntensity)  + " " + String(latitude) + " " + String(longitude); //Transmit a informational pulse to ground station
     data = "";
+    //GPS.satellites, GPS.fix, GPS.fixquality for debugging
   }
   else
   {
     while(1);
+  }
+}
+
+void writeFloat(float f, uint8_t* &payload, start, end) //writes float to data packet
+{
+  unsigned int asInt = *((int*)&f);
+  for (int i = start; i <= end; i++)
+  {
+    payload[i] = (asInt >> 8 * i) & 0xFF;
   }
 }
