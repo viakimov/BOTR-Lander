@@ -1,214 +1,141 @@
-#include <Adafruit_Sensor.h>  //general
-#include <Wire.h>
-#include <Adafruit_BME280.h> // for barometer/temp/humidity sensor
-#include <Adafruit_INA219.h> // for current sensor
-#include <Adafruit_TSL2561_U.h>//light sensor
-#include <SoftwareSerial.h> //xbee
-#include <XBee.h>
-#include <CurieIMU.h> //accelerometer
+#include <Adafruit_TSL2561_U.h>
+#include <Adafruit_BNO055.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_INA219.h>
+#include <Adafruit_BME280.h>
+#include <Adafruit_GPS.h>
+#include <SoftwareSerial.h>
+#include <Adafruit_VC0706.h>
+#include <SPI.h>
 
-//Need to configure
-Xbee xbee; //Using API mode
-Adafruit_BME280 bme;  //barometer/temp/alt sensor
-Adafruit_INA219 ina;    //current sensor
-Adafruit_TSL2561_Unified tsl;
+#define BME_SCK 13
+#define BME_MISO 12
+#define BME_MOSI 11
+#define BME_CS 10
+#define SLP (1013.25)
 
-float SEALEVELPRESSURE_HPA = 1013.25;
-float pressure, altitude, accelerationx, accelerationy, accelerationz temperature, humidity, voltage, lightIntensity; //telemetry
-uint8_t payload_ground[] = uint8_t[6 * 4]; //data packet to send
-uint8_t payload_launch[] = uint8_t[6 * 2];
+// XBee's DOUT (TX) is connected to pin 2 (Arduino's Software RX)
+// XBee's DIN (RX) is connected to pin 3 (Arduino's Software TX)
+SoftwareSerial XBee(2, 3); // RX, TX
 
-unsigned long start = millis();
+Adafruit_INA219 ina;
+Adafruit_BME280 bme;
+Adafruit_TSL2561_Unified tsl = Adafruit_TSL2561_Unified(TSL2561_ADDR_FLOAT, 12345);
+Adafruit_BNO055 bno = Adafruit_BNO055();
 
-TxStatusResponse txStatus = TxStatusResponse();
-Tx16Request tx_ground;
-Tx16Request tx_launch;
+byte state = 0;
+float groundLevelBaro;
+
+SoftwareSerial GPSSerial(8, 7);
+Adafruit_GPS GPS(&GPSSerial);
+
+boolean usingInterrupt = false;
+
+#define chipSelect 10
 
 void setup()
 {
   Serial.begin(9600);
-  
-  xbee.setSerial(9600);
-  
-  bme.begin()
-  
-  ina.begin();
-  ina219.setCalibration_16V_400mA()
-  
-  tsl.begin()
-  tsl.enableAutoRange(true);
+  GPSSerial.listen();
+  GPS.begin(9600);
+  GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCONLY);
+  GPS.sendCommand(PMTK_SET_NMEA_UPDATE_1HZ);   // 1 Hz update rate
+  GPS.sendCommand(PGCMD_ANTENNA);
+
+  delay(10000);
+
+  pinMode(4, OUTPUT);
+
+  XBee.begin(9600);
+
+  bme.begin();
+  delay(1000);
+  groundLevelBaro = bme.readAltitude(SLP);
+
+  tsl.begin();
   tsl.setIntegrationTime(TSL2561_INTEGRATIONTIME_13MS);
+  tsl.setGain(TSL2561_GAIN_1X);
 
-  CurieIMU.begin();
-  CurieIMU.setAccelerometerRange(4);
+  ina.begin();
+
+  bno.begin();
 }
 
-void loop()
+uint32_t timer = millis();
+void loop()                     // run over and over again
 {
-  //High level outline of lander operations, edit the methods below
-  powerUp();
-  integration();
-  launch();
-  deployment();
-  landing();
-  groundOperation();
-}
-
-void powerUp()
-{
-  //Put all components not utilized during launch into low power modes
-  //Once the XBee has established a link with the GS XBee,
-  //Repeatedly transmit a basic packet of confirmation data until you receive a reply from the GS
-  //The GS will use this transmission to display a connection confirmation and to understand when to expect data from the lander
-  //Wait a few seconds and transmit a reply confirmation message to the GS
-}
-
-void integration()
-{
-  //Wait until an integration command is received from the GS
-  //This command will be sent by a user operating the GS and will signify the lander is integrated into the rocket and ready for launch
-}
-
-void launch()
-{
-  while (bmp.readAltitude(seaLevelPressure) < 155) //Rounded up to 155 meters, around 510 feet to account for error
+  char c = GPS.read();
+  if (GPS.newNMEAreceived())
   {
-    altitude = bmp.readAltitude(seaLevelPressure);
-    payload_launch[0] = (byte)('A'); //A for altitude reading
-    payload_launch[5] = (byte)('.');
-    writeFloat(altitude, payload_launch, 1, 4);
-    
-    CurieIMU.readAccelerometerScaled(accelerationx, accelerationy, accelerationz);
-    payload[6] = (byte)('C'); //C for acceleration reading
-    payload[11] = (byte)('.');
-    writeFloat(accelerationx, payload_launch, 7, 10); //Identify which axis is actually facing in desired direction
-    
-    tx_launch = Tx16Request(0x1874, payload_launch, sizeof(payload_launch));
-    xbee.send(tx_launch);
-    
-    while (Micros() % 1000000 > 4) //Delay for full second
-    {
-    }
+    if (!GPS.parse(GPS.lastNMEA()))
+      return;
   }
-  //In in one second intervals:
-  //Measure altitude from the barometer and log it in the SD card
-  //Calculate acceleration from barometric data and log it in the SD card
-  //Transmit the altitude and acceleration to the GS
-  //Do this until we reach 500 feet
-  //Send a confirmation to the GS that we have reached 500 feet
-}
-
-void deployment()
-{
-  //In in one second intervals:
-  //Measure altitude from the barometer and log it in the SD card
-  //Calculate acceleration from barometric data and log it in the SD card
-  //Transmit the altitude and acceleration to the GS
-  //Do this until we are on the ground
-  //Send a confirmation to the GS that we are on the ground
-}
-
-void landing()
-{
-  //Open the side panels
-  //Disable low power modes of components
-  //Send a confirmation to the GS that we have uprighted
-}
-
-void groundOperation()
-{
-  //Maximize bandwith usage and point scoring. Ensure everything is timed correctly to avoid skipping transmissions because of data processing or servo operation delays
-  //It is probably more effective to repeatedly send remotely-pointed images instead of bothering with the other telemetry.
-  //Each remotely pointed image is worth 15 points each and I've read that they should be around 200kb each.
-  //Even if we just send images, we still need to send some sensor data at the begining to meet rule requirements
-
-  //Send basic sensor data (light, temp, humidity, battery voltage, GPS) to GS several times
-  for (int i = 0; i < 10; i++)
+  // if millis() or timer wraps around, we'll just reset it
+  if (timer > millis())
   {
-    /*each reading has 4 bytes + letter (start) and period (end) = 6 bytes * 4 sensor readings */
-    //payload = uint8_t[6*4]
+    timer = millis();
+  }
 
-    /*finds temperature in Celcius*/
-    temperature = bme.readTemperature();
-    Serial.print("Temperature: "); Serial.print(temperature); Serial.println(" C"); //for ground testing
-    /*writes pressure to packet*/
-    payload_ground[0] = (byte)('T'); //T for temperature reading
-    payload_ground[5] = (byte)('.');
-    writeFloat(temperature, payload_ground, 1, 4);
-
-    /*finds humidity in percent*/
-    humidity = bme.readHumidity();
-    Serial.print("Humidity: "); Serial.print(humidity); Serial.println(" %"); //for ground testing
-    /*writes pressure to packet*/
-    payload_ground[6] = (byte)('H'); //H for humidity reading
-    payload_ground[11] = (byte)('.');
-    writeFloat(temperature, payload_ground, 7, 10);
-
-    /*finds voltage in volts*/
-    voltage = ina.getBusVoltage_V() + ina.getShuntVoltage_mV() / 1000; //load voltage
-    Serial.print("Voltage: "); Serial.print(voltage); Serial.println(" V"); //for ground testing
-    /*writes voltage to packet*/
-    payload_ground[12] = (byte)('V'); //V for voltage reading
-    payload_ground[17] = (byte)('.');
-    writeFloat(temperature, payload_ground, 13, 16);
-
-    /*finds light intensity in lux*/
+  // approximately every 2 seconds or so, print out the current stats
+  if (millis() - timer > 1000) {
+    timer = millis(); // reset the timer
     sensors_event_t event;
     tsl.getEvent(&event);
-    if (event.light)
+    transmit(event.light);
+
+    transmit(bme.readAltitude(SLP) - groundLevelBaro);
+    transmit(bme.readTemperature());
+    transmit(bme.readHumidity());
+
+    transmit(ina.getBusVoltage_V() + (ina.getShuntVoltage_mV() / 1000));
+    transmit(ina.getCurrent_mA());
+
+    imu::Vector<3> acc_vec = bno.getVector(Adafruit_BNO055::VECTOR_ACCELEROMETER);
+    float acc = sqrt(acc_vec.x() * acc_vec.x() + acc_vec.y() * acc_vec.y() + acc_vec.z() * acc_vec.z());
+
+    transmit(acc);
+    transmit(state);
+    transmit(GPS.fix);
+    if (GPS.fix)
     {
-      lightIntensity = event.light;
-      Serial.print("Light: "); Serial.print(lightIntensity); Serial.println(" lux"); //for ground testing
-      /*writes voltage to packet*/
-      payload_ground[18] = (byte)('L'); //L for light reading
-      payload_ground[23] = (byte)('.');
-      writeFloat(temperature, payload_ground, 19, 22);
+      transmit(GPS.latitudeDegrees);
+      transmit(GPS.longitudeDegrees);
     }
+    newLine();
 
-    tx_ground = Tx16Request(0x1874, payload_ground, sizeof(payload_ground))
-    //Send telemtry packet
-    xbee.send(tx_ground);
-
-    while (Micros() % 1000000 > 4) //Delay until around next second
+    if (state == 0)
     {
+      if (bme.readAltitude(SLP) - groundLevelBaro > 10.0 && acc / 9.81 > 2)
+      {
+        state = 1;
+      }
+    }
+    if (state == 1)
+    {
+      if (bme.readAltitude(SLP) - groundLevelBaro < 10.0 && acc / 9.81 < 1.3)
+      {
+        transmit(999.999);
+        newLine();
+        delay(5000);
+        digitalWrite(4, HIGH);
+        delay(5000);
+        digitalWrite(4, LOW);
+        state = 2;
+      }
     }
   }
-
-  //Then send images repeatedly:
-  while (true)
-  {
-    //This will probably require reading the milliseconds clock to time everything:
-
-    //For 0.25 seconds: Listen for transmissions from GS
-    //If panorama command is received:
-    takePanorama();
-    //If camera rotation command is received
-    rotateCamera();
-
-    //**To most effectivly use our transmission bandwith we need to have at least 2 images stored at a time.
-    //**A transmission can either have data from one image or data from the end of one image plus data from the begining of another.
-
-    //If less than 2 images stored: Take picture
-
-    //When the millisecond clock is at a whole second, transmit as much image data as possible
-  }
 }
-
-void takePanorama()
+void transmit(double f)
 {
-
+  Serial.print(f, 6);
+  XBee.listen();
+  XBee.print(f, 6);
+  Serial.print(" ");
+  XBee.print(" ");
+  GPSSerial.listen();
 }
-
-void rotateCamera()
+void newLine()
 {
-
-}
-
-void writeFloat(float f, uint8_t* &payload, start, end) //writes float to data packet
-{
-  unsigned int asInt = *((int*)&f);
-  for (int i = start; i <= end; i++)
-  {
-    payload[i] = (asInt >> 8 * i) & 0xFF;
-  }
+  Serial.println();
+  XBee.println();
 }
